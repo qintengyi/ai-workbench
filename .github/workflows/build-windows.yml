@@ -1,0 +1,55 @@
+name: Build Windows (WinUI 3)
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'windows/**'
+      - '.github/workflows/build-windows.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'windows/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore
+        run: msbuild AiWorkbench.sln /t:Restore /p:Configuration=Release /p:Platform=x64 -m
+
+      - name: Build (Release x64, self-contained)
+        run: |
+          msbuild AiWorkbench.sln `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /p:SelfContained=true `
+            /p:WindowsAppSDKSelfContained=true `
+            /p:RuntimeIdentifier=win-x64 `
+            /p:PlatformTarget=x64 `
+            -m
+
+      - name: Publish artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AiWorkbench-win-x64
+          path: |
+            windows/src/AiWorkbench/bin/x64/Release/net9.0-windows10.0.19041/win-x64/**
+            !**/*.pdb
+          if-no-files-found: error

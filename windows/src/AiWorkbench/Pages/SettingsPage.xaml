@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="AiWorkbench.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:AiWorkbench.Models">
+    <Grid RowDefinitions="Auto,*,Auto">
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Padding="0,0,0,8">
+            <ComboBox x:Name="ProviderList" Header="Provider 列表" Width="260"
+                      DisplayMemberPath="Name" SelectionChanged="Provider_Changed"/>
+            <Button x:Name="NewBtn" Content="新建" Click="New_Click" VerticalAlignment="Bottom"/>
+            <Button x:Name="DeleteBtn" Content="删除" Click="Delete_Click" VerticalAlignment="Bottom"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" Padding="0,4">
+            <StackPanel x:Name="FormPanel" Spacing="10" MaxWidth="900">
+                <!-- 基础 -->
+                <TextBlock Text="基础信息" FontWeight="SemiBold" Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                <TextBox x:Name="IdBox" Header="模型 ID（如 GLM-5.2）"/>
+                <TextBox x:Name="NameBox" Header="显示名称"/>
+                <TextBox x:Name="VendorBox" Header="提供商（vendor）"/>
+                <TextBox x:Name="UrlBox" Header="接口地址（url，OpenAI 兼容 /v1）"/>
+                <PasswordBox x:Name="KeyBox" Header="API Key"/>
+
+                <!-- token 上限 -->
+                <NumberBox x:Name="MaxInBox" Header="上下文输入上限 maxInputTokens" Value="128000"/>
+                <NumberBox x:Name="OutBox" Header="最大输出 maxOutputTokens" Value="8192"/>
+
+                <!-- 能力开关 -->
+                <TextBlock Text="模型能力" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                <ToggleSwitch x:Name="ToolCallToggle" Header="工具调用 supportsToolCall" OffContent="否" OnContent="是"/>
+                <ToggleSwitch x:Name="ReasoningOnlyToggle" Header="仅思考 supportsReasoning" OffContent="否" OnContent="是"/>
+                <ToggleSwitch x:Name="ImagesToggle" Header="图片输入 supportsImages" OffContent="否" OnContent="是"/>
+                <ToggleSwitch x:Name="CustomProtoToggle" Header="自定义协议 useCustomProtocol" OffContent="否" OnContent="是"/>
+
+                <!-- 思考 -->
+                <TextBlock Text="思考" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                <TextBox x:Name="ReasoningModeBox" Header="思考模式（reasoningMode）"/>
+                <ToggleSwitch x:Name="AllowDisableToggle" Header="允许关闭思考 allowDisableReasoning" OffContent="否" OnContent="是"/>
+                <TextBox x:Name="DefaultEffortBox" Header="默认思考强度（reasoning.defaultEffort）"/>
+                <TextBox x:Name="SupportedEffortsBox" Header="支持的思考强度（逗号分隔，如 xhigh,high,medium,low）"/>
+
+                <!-- 辅助 -->
+                <TextBlock Text="主辅模型关系" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                <ToggleSwitch x:Name="AuxToggle" Header="标记为辅助模型 isAuxiliary" OffContent="否" OnContent="是"/>
+                <TextBox x:Name="AuxForBox" Header="辅助所服务的主模型 ID（auxiliaryFor，留空表示非辅助）"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Padding="0,8,0,0" HorizontalAlignment="Right">
+            <Button x:Name="SaveBtn" Content="保存" Style="{ThemeResource AccentButtonStyle}" Click="Save_Click"/>
+            <Button x:Name="ResetBtn" Content="重置" Click="Reset_Click"/>
+        </StackPanel>
+    </Grid>
+</Page>

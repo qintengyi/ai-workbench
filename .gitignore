@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# 敏感运行时生成
+server/config.json
+server/data.db
+server/data.db-wal
+server/data.db-shm
+
+# 构建产物
+windows/src/AiWorkbench/bin/
+windows/src/AiWorkbench/obj/
+ios/build/
+ios/AiWorkbench.xcodeproj/
+ios/Payload/
+*.ipa
+
+# IDE
+.vs/
+.vscode/
+*.user

@@ -1,0 +1,20 @@
+[Unit]
+Description=AI Workbench Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/www/wwwroot/ai-workbench/server
+ExecStart=/usr/bin/python3 /www/wwwroot/ai-workbench/server/main.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+# 日志走 journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-workbench
+
+[Install]
+WantedBy=multi-user.target
