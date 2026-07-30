@@ -230,7 +230,7 @@ struct StreamingBubble: View {
                     }
                 }
             }
-            .frame(maxWidth: .85, alignment: .leading)
+            .frame(maxWidth: 0.85, alignment: .leading)
         }
     }
 }
