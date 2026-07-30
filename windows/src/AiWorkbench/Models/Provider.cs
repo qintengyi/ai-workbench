@@ -42,9 +42,16 @@ public class Provider
     [JsonPropertyName("supportsReasoning")]
     public bool SupportsReasoning { get; set; }
 
-    /// <summary>使用自定义协议（false = 标准 OpenAI /v1/chat/completions）。</summary>
+    /// <summary>使用自定义协议（兼容旧字段；实际协议由 ApiFormat 决定）。</summary>
     [JsonPropertyName("useCustomProtocol")]
     public bool UseCustomProtocol { get; set; }
+
+    /// <summary>
+    /// 接口协议格式：openai（默认 /v1/chat/completions）或 anthropic（/v1/messages + x-api-key + thinking.budget_tokens）。
+    /// 对齐 ai_engine.py 的 api_format 字段。PROVIDER_SPEC 第 9 条要求双格式。
+    /// </summary>
+    [JsonPropertyName("api_format")]
+    public string ApiFormat { get; set; } = "openai";
 
     /// <summary>是否允许关闭思考。</summary>
     [JsonPropertyName("allowDisableReasoning")]
@@ -72,10 +79,6 @@ public class Provider
 
         [JsonPropertyName("defaultEffort")]
         public string DefaultEffort { get; set; } = "medium";
-
-        /// <summary>是否允许关闭思考（与上层 AllowDisableReasoning 同义，UI 暴露）。</summary>
-        [JsonPropertyName("allowDisableReasoning")]
-        public bool AllowDisableReasoning { get; set; } = true;
     }
 
     public static JsonSerializerOptions JsonOpts => new()

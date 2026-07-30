@@ -110,7 +110,7 @@ public sealed partial class ChatPage : Page
         try
         {
             // 第 10 条主辅切换：在调用前把图片识别为文字（透明）
-            var prepared = await MainWindow.ImageRouter.PrepareForPrimaryAsync(_current, userMsg);
+            var prepared = await MainWindow.ImageRouter.PrepareForPrimaryAsync(_current, userMsg, _cts.Token);
             // 把 system 与 user 历史一并发送（简化：单轮）
             var history = new System.Collections.Generic.List<Message>
             {
@@ -123,27 +123,22 @@ public sealed partial class ChatPage : Page
             await MainWindow.AiClient.StreamChatAsync(_current, modelId, history, effort,
                 onContent: c =>
                 {
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        assistant.Content += c;
-                        BindBack(assistant);
-                    });
+                    DispatcherQueue.TryEnqueue(() => { assistant.Content += c; });
                     return Task.CompletedTask;
                 },
                 onReasoning: r =>
                 {
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        assistant.ReasoningContent += r;
-                        BindBack(assistant);
-                    });
+                    DispatcherQueue.TryEnqueue(() => { assistant.ReasoningContent += r; });
                     return Task.CompletedTask;
                 },
                 _cts.Token);
 
             // 把辅助调用审计合并到 assistant 消息上（便于 UI 展示）
-            foreach (var t in prepared.AuxiliaryTrace) assistant.AuxiliaryTrace.Add(t);
-            BindBack(assistant);
+            if (prepared.AuxiliaryTrace.Count > 0)
+            {
+                foreach (var t in prepared.AuxiliaryTrace) assistant.AuxiliaryTrace.Add(t);
+                assistant.RaiseAuxTraceChanged();
+            }
         }
         catch (OperationCanceledException)
         {
@@ -160,19 +155,39 @@ public sealed partial class ChatPage : Page
         }
     }
 
-    private void BindBack(Message m)
-    {
-        var idx = Messages.IndexOf(m);
-        if (idx >= 0)
-        {
-            Messages.RemoveAt(idx);
-            Messages.Insert(idx, m);
-        }
-    }
-
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
         try { _cts?.Cancel(); } catch { }
+    }
+
+    // Ctrl+V 粘贴图片
+    protected override void OnPreviewKeyDown(KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.V
+            && (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+                & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0)
+        {
+            var clip = Windows.ApplicationModel.DataTransfer.Clipboard.GetContent();
+            if (clip.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.Bitmap))
+            {
+                _ = PasteImageAsync(clip);
+            }
+        }
+        base.OnPreviewKeyDown(e);
+    }
+
+    private async Task PasteImageAsync(Windows.ApplicationModel.DataTransfer.DataPackageView clip)
+    {
+        try
+        {
+            var refObj = await clip.GetBitmapAsync();
+            using var stream = await refObj.OpenReadAsync();
+            using var ms = new MemoryStream();
+            await stream.AsStreamForRead().CopyToAsync(ms);
+            _pendingImages.Add(Convert.ToBase64String(ms.ToArray()));
+            ImgCount.Text = $"已附加 {_pendingImages.Count} 张图片";
+        }
+        catch { }
     }
 
     // ─── 图片附加：拖放 + 粘贴 + 文件选择 ───────────────────

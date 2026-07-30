@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -13,6 +14,7 @@ namespace AiWorkbench.Services;
 /// 被控端 WS 客户端：连 Server /ws/agent?token=AGENT_TOKEN，接收 iOS 指令执行。
 /// 对应 ARCHITECTURE.md Windows 端职责 3。
 /// 消息格式：{type, data, ts}，统一响应 {code, msg, data}。
+/// 文件树结果回 {type:"command_result", request_id, data:{tree}}（让 Future 正确 resolve）。
 /// </summary>
 public sealed class AgentClient
 {
@@ -21,7 +23,7 @@ public sealed class AgentClient
     private readonly AiClient _ai;
     private readonly ImageRouter _router;
 
-    private CancellationTokenSource _cts = new();
+    private CancellationTokenSource? _loopCts;
     private ClientWebSocket? _ws;
 
     public string ServerUrl { get; set; } = "ws://127.0.0.1:10370/ws/agent";
@@ -29,7 +31,7 @@ public sealed class AgentClient
     public bool IsConnected => _ws?.State == WebSocketState.Open;
 
     public event EventHandler<string>? OnLog;
-    public event EventHandler<JsonNode>? OnCommand; // 上层可订阅（如刷新 UI 会话列表）
+    public event EventHandler<JsonNode>? OnCommand;
 
     public AgentClient(ProviderStore providers, FileWorkspace files, AiClient ai, ImageRouter router)
     {
@@ -41,46 +43,44 @@ public sealed class AgentClient
 
     public async Task RunAsync(CancellationToken ct)
     {
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        while (!_cts.IsCancellationRequested)
+        _loopCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        while (!_loopCts.IsCancellationRequested)
         {
             try
             {
-                await ConnectAndServeAsync(_cts.Token).ConfigureAwait(false);
+                await ConnectAndServeAsync(_loopCts.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
                 OnLog?.Invoke(this, $"[agent] 连接异常: {ex.Message}");
             }
-            try { await Task.Delay(3000, _cts.Token).ConfigureAwait(false); }
+            try { await Task.Delay(3000, _loopCts.Token).ConfigureAwait(false); }
             catch { break; }
         }
     }
 
     public void Stop()
     {
-        try { _cts.Cancel(); } catch { }
+        try { _loopCts?.Cancel(); } catch { }
         try { _ws?.Dispose(); } catch { }
     }
 
     private async Task ConnectAndServeAsync(CancellationToken ct)
     {
-        using var ws = new ClientWebSocket();
-        _ws = ws;
-        if (!string.IsNullOrEmpty(AgentToken))
-        {
-            var uri = new UriBuilder(ServerUrl)
-            {
-                Query = $"token={Uri.EscapeDataString(AgentToken)}",
-            }.Uri;
-            await ws.ConnectAsync(uri, ct).ConfigureAwait(false);
-        }
-        else
+        if (string.IsNullOrEmpty(AgentToken))
         {
             OnLog?.Invoke(this, "[agent] 未配置 AgentToken，跳过连接");
             return;
         }
+
+        using var ws = new ClientWebSocket();
+        _ws = ws;
+        var uri = new UriBuilder(ServerUrl)
+        {
+            Query = $"token={Uri.EscapeDataString(AgentToken)}",
+        }.Uri;
+        await ws.ConnectAsync(uri, ct).ConfigureAwait(false);
 
         OnLog?.Invoke(this, "[agent] 已连接服务端");
 
@@ -98,7 +98,7 @@ public sealed class AgentClient
 
             if (r.MessageType == WebSocketMessageType.Close)
             {
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", ct).ConfigureAwait(false);
+                try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", ct).ConfigureAwait(false); } catch { }
                 break;
             }
 
@@ -107,17 +107,27 @@ public sealed class AgentClient
 
             var raw = sb.ToString();
             sb.Clear();
-            _ = Task.Run(async () =>
+            // 后台处理，避免阻塞接收循环；用 ws 引用判断状态
+            _ = HandleAndReplyAsync(ws, raw, ct);
+        }
+    }
+
+    private async Task HandleAndReplyAsync(ClientWebSocket ws, string raw, CancellationToken ct)
+    {
+        try
+        {
+            var resp = await HandleAsync(raw).ConfigureAwait(false);
+            if (resp is null) return;
+            var respText = resp.ToJsonString();
+            if (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
             {
-                var resp = await HandleAsync(raw).ConfigureAwait(false);
-                if (resp is null) return;
-                var respText = resp.ToJsonString();
-                if (ws.State == WebSocketState.Open)
-                {
-                    await ws.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(respText)),
-                        WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
-                }
-            }, ct);
+                await ws.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(respText)),
+                    WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            OnLog?.Invoke(this, $"[agent] 回复失败: {ex.Message}");
         }
     }
 
@@ -125,7 +135,7 @@ public sealed class AgentClient
     {
         JsonNode? msg;
         try { msg = JsonNode.Parse(raw); }
-        catch { return WrapResult(400, "invalid json", null, null); }
+        catch { return WrapResult(400, "invalid json", null, null, null); }
         if (msg is null) return null;
 
         var type = msg["type"]?.ToString() ?? "";
@@ -137,9 +147,9 @@ public sealed class AgentClient
             object? resultData = type switch
             {
                 "ping" => new { pong = true },
-                "list_providers" => await _providers.LoadAsync(),
-                "list_files" => _files.List(data["dir"]?.ToString()),
-                "read_file" => _files.ReadText(data["path"]?.ToString() ?? ""),
+                "list_providers" => new { providers = await _providers.LoadAsync() },
+                "list_files" => new { tree = _files.List(data["dir"]?.ToString()) },
+                "read_file" => new { content = _files.ReadText(data["path"]?.ToString() ?? "") },
                 "send_message" => await HandleSendMessageAsync(data),
                 _ => new { error = $"unknown command: {type}" },
             };
@@ -159,6 +169,16 @@ public sealed class AgentClient
         var modelId = data["modelId"]?.ToString() ?? "";
         var content = data["content"]?.ToString() ?? "";
         var effort = data["effort"]?.ToString();
+        // 远程 iOS 端可带 images base64 数组
+        var images = new List<string>();
+        if (data["images"] is JsonArray imgArr)
+        {
+            foreach (var img in imgArr)
+            {
+                var s = img?.ToString();
+                if (!string.IsNullOrEmpty(s)) images.Add(s);
+            }
+        }
 
         var providers = await _providers.LoadAsync();
         var provider = providers.Find(p => p.Id == providerId)
@@ -169,14 +189,15 @@ public sealed class AgentClient
             Role = "user",
             Content = content,
         };
+        foreach (var img in images) userMsg.Images.Add(img);
 
-        // 第 10 条主辅切换
-        userMsg = await _router.PrepareForPrimaryAsync(provider, userMsg);
+        // 第 10 条主辅切换（透明，不修改原 userMsg 语义）
+        var prepared = await _router.PrepareForPrimaryAsync(provider, userMsg).ConfigureAwait(false);
 
         var history = new List<Message>
         {
             new() { Role = "system", Content = "你是 AI Workbench 助手。" },
-            userMsg,
+            prepared,
         };
 
         var sb = new StringBuilder();
@@ -190,14 +211,15 @@ public sealed class AgentClient
         {
             content = sb.ToString(),
             reasoning = reasoning.ToString(),
-            auxiliaryTrace = userMsg.AuxiliaryTrace,
+            auxiliaryTrace = prepared.AuxiliaryTrace,
         };
     }
 
-    private static JsonObject WrapResult(int code, string msg, object? data, string? requestId, string? type = null)
+    private static JsonObject WrapResult(int code, string msg, object? data, string? requestId, string? type)
     {
         var obj = new JsonObject
         {
+            ["type"] = "command_result",
             ["code"] = code,
             ["msg"] = msg,
         };
@@ -209,7 +231,6 @@ public sealed class AgentClient
             });
         }
         if (requestId is not null) obj["request_id"] = requestId;
-        if (type is not null) obj["type"] = "command_result";
         return obj;
     }
 }

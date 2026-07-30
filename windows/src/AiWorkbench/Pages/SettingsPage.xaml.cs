@@ -40,6 +40,7 @@ public sealed partial class SettingsPage : Page
         ReasoningOnlyToggle.IsOn = p.SupportsReasoning;
         ImagesToggle.IsOn = p.SupportsImages;
         CustomProtoToggle.IsOn = p.UseCustomProtocol;
+        ApiFormatCombo.SelectedItem = string.IsNullOrEmpty(p.ApiFormat) ? "openai" : p.ApiFormat;
         ReasoningModeBox.Text = p.ReasoningMode;
         AllowDisableToggle.IsOn = p.AllowDisableReasoning;
         DefaultEffortBox.Text = p.Reasoning.DefaultEffort;
@@ -63,6 +64,7 @@ public sealed partial class SettingsPage : Page
             SupportsReasoning = ReasoningOnlyToggle.IsOn,
             SupportsImages = ImagesToggle.IsOn,
             UseCustomProtocol = CustomProtoToggle.IsOn,
+            ApiFormat = ApiFormatCombo.SelectedItem?.ToString() == "anthropic" ? "anthropic" : "openai",
             ReasoningMode = ReasoningModeBox.Text.Trim(),
             AllowDisableReasoning = AllowDisableToggle.IsOn,
             IsAuxiliary = AuxToggle.IsOn,
@@ -74,7 +76,6 @@ public sealed partial class SettingsPage : Page
             .ToList();
         if (p.Reasoning.SupportedEfforts.Count == 0)
             p.Reasoning.SupportedEfforts = new() { "medium" };
-        p.Reasoning.AllowDisableReasoning = p.AllowDisableReasoning;
         return p;
     }
 

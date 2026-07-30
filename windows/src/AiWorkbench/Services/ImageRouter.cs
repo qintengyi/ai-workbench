@@ -57,7 +57,7 @@ public sealed class ImageRouter
                 ProviderId = "(none)",
                 Result = "[图片识别失败：未配置辅助视觉模型]",
             });
-            prepared.Content += "\n\n[用户发送了图片，但当前未配置可识别图片的辅助模型。]";
+            prepared.Content += "\n\n[用户发送了图片，但当前未配置可识别图片的辅助模型。请在设置中添加 supportsImages=true 的 provider 并标记为辅助。]";
             prepared.Images.Clear();
             return prepared;
         }
@@ -73,13 +73,30 @@ public sealed class ImageRouter
             new()
             {
                 Role = "user",
-                Content = "请描述这张图片。",
+                // 用户只发图无文字时给默认提示词，避免空 content
+                Content = string.IsNullOrWhiteSpace(prepared.Content) ? "请描述这张图片。" : prepared.Content,
                 Images = new List<string>(prepared.Images),
             },
         };
 
-        var description = await _ai.CompleteAsync(aux, aux.Id, auxMessages, null, ct)
-            .ConfigureAwait(false);
+        string description;
+        try
+        {
+            description = await _ai.CompleteAsync(aux, aux.Id, auxMessages, null, ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // 辅助模型调用失败：降级为提示文字，不抛异常上抛（避免阻断主对话）
+            prepared.AuxiliaryTrace.Add(new AuxiliaryTrace
+            {
+                ProviderId = aux.Id,
+                Result = $"[图片识别失败：{ex.Message}]",
+            });
+            prepared.Content += $"\n\n[用户发送了图片，但辅助模型 {aux.Name} 识别失败：{ex.Message}]";
+            prepared.Images.Clear();
+            return prepared;
+        }
 
         prepared.AuxiliaryTrace.Add(new AuxiliaryTrace
         {
@@ -88,7 +105,10 @@ public sealed class ImageRouter
         });
 
         // 注入主模型：把图片描述作为用户文字，移除原始图片
-        prepared.Content = $"[用户发送了图片，辅助模型 {aux.Name} 已识别]\n图片描述：{description}\n\n用户原话：{prepared.Content}";
+        // 保留原 Content（用户原话），附加图片描述
+        prepared.Content = string.IsNullOrWhiteSpace(prepared.Content)
+            ? $"[用户发送了图片，辅助模型 {aux.Name} 已识别]\n图片描述：{description}"
+            : $"[用户发送了图片，辅助模型 {aux.Name} 已识别]\n图片描述：{description}\n\n用户原话：{prepared.Content}";
         prepared.Images.Clear();
         return prepared;
     }

@@ -32,6 +32,10 @@
                 <ToggleSwitch x:Name="ReasoningOnlyToggle" Header="仅思考 supportsReasoning" OffContent="否" OnContent="是"/>
                 <ToggleSwitch x:Name="ImagesToggle" Header="图片输入 supportsImages" OffContent="否" OnContent="是"/>
                 <ToggleSwitch x:Name="CustomProtoToggle" Header="自定义协议 useCustomProtocol" OffContent="否" OnContent="是"/>
+                <ComboBox x:Name="ApiFormatCombo" Header="接口协议 api_format（openai 或 anthropic）" Width="260">
+                    <x:String>openai</x:String>
+                    <x:String>anthropic</x:String>
+                </ComboBox>
 
                 <!-- 思考 -->
                 <TextBlock Text="思考" FontWeight="SemiBold" Margin="0,8,0,0"/>
