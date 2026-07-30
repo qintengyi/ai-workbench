@@ -20,10 +20,7 @@ public sealed class AiClient : IDisposable
 {
     public const string UserAgent = "CodeBuddy-Code/5.3.5";
 
-    private static readonly HttpClient _http = new(new HttpClientHandler
-    {
-        MaxResponseContentBufferSize = int.MaxValue,
-    })
+    private static readonly HttpClient _http = new HttpClient(new HttpClientHandler())
     {
         Timeout = TimeSpan.FromMinutes(10),
     };
