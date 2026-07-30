@@ -137,7 +137,7 @@ async def send_command(
 
     fut: Optional[asyncio.Future] = None
     if wait:
-        fut = asyncio.get_event_loop().create_future()
+        fut = asyncio.get_running_loop().create_future()
         _pending_commands[request_id] = fut
 
     ok = await send_to_agent(message)
@@ -212,7 +212,8 @@ async def handle_agent_message(msg: dict[str, Any]) -> None:
         return
 
     if msg_type == "file_tree":
-        # 文件树结果，直接转发给所有 iOS（也可用 command_result 流回）
+        # 文件树结果：resolve 等待中的 command_result Future + 转发给 iOS
+        resolve_command_result(msg)
         await broadcast_to_apps({"type": "file_tree", "data": data, "ts": ts})
         return
 

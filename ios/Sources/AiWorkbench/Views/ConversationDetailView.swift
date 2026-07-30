@@ -15,6 +15,12 @@ struct ConversationDetailView: View {
     @State private var streamingText: String = ""
     @State private var streamingReasoning: String = ""
     @State private var isStreaming: Bool = false
+    /// 流超时看门狗 Task
+    @State private var streamTimeoutTask: Task<Void, Never>?
+    /// 乐观消息递减计数器（避免同秒 Date 重复）
+    @State private var _optimId: Int = -1
+    /// handleNewMessage debounce
+    @State private var refreshDebounceTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -63,6 +69,8 @@ struct ConversationDetailView: View {
         .onDisappear {
             appState.webSocketClient.onStreamChunk = nil
             appState.webSocketClient.onNewMessage = nil
+            streamTimeoutTask?.cancel()
+            refreshDebounceTask?.cancel()
         }
     }
 
@@ -118,20 +126,37 @@ struct ConversationDetailView: View {
         guard !content.isEmpty, !isSending else { return }
         isSending = true
         inputText = ""
-        // 乐观插入用户消息
-        let optimistic = Message(id: -Int(Date().timeIntervalSince1970), conversationId: conversationId, role: "user", content: content, ts: Int64(Date().timeIntervalSince1970))
+        // 乐观插入用户消息：递减计数器避免同秒 Date 重复
+        let optimistic = Message(id: _optimId, conversationId: conversationId, role: "user", content: content, ts: Int64(Date().timeIntervalSince1970))
+        _optimId -= 1
         messages.append(optimistic)
         streamingText = ""
         streamingReasoning = ""
         isStreaming = true
+        // 启动 30s 流超时看门狗
+        streamTimeoutTask?.cancel()
+        streamTimeoutTask = Task { [self] in
+            try? await Task.sleep(nanoseconds: 30_000_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                if self.isStreaming {
+                    self.isStreaming = false
+                    self.errorMsg = "响应超时"
+                    self.streamingText = ""
+                    self.streamingReasoning = ""
+                }
+            }
+        }
         do {
             _ = try await APIClient.shared.sendMessage(conversationId: conversationId, content: content)
         } catch let err as APIError {
             isStreaming = false
+            streamTimeoutTask?.cancel()
             errorMsg = err.errorDescription
             if case .authRequired = err { appState.logout() }
         } catch {
             isStreaming = false
+            streamTimeoutTask?.cancel()
             errorMsg = "发送失败：\(error.localizedDescription)"
         }
         isSending = false
@@ -145,16 +170,18 @@ struct ConversationDetailView: View {
         if let r = chunk.reasoningDelta, !r.isEmpty { streamingReasoning += r }
         isStreaming = !chunk.finished
         if chunk.finished {
-            // 流结束：把流文本暂存为占位 assistant 消息，等 new_message 事件刷新真实消息
+            // 流结束：取消超时看门狗，把流文本暂存为占位 assistant 消息，等 new_message 事件刷新真实消息
+            streamTimeoutTask?.cancel()
             if !streamingText.isEmpty {
                 let placeholder = Message(
-                    id: -Int(Date().timeIntervalSince1970) - 1,
+                    id: _optimId,
                     conversationId: conversationId,
                     role: "assistant",
                     content: streamingText,
                     reasoningContent: streamingReasoning.isEmpty ? nil : streamingReasoning,
                     ts: Int64(Date().timeIntervalSince1970)
                 )
+                _optimId -= 1
                 messages.append(placeholder)
             }
             streamingText = ""
@@ -164,7 +191,13 @@ struct ConversationDetailView: View {
 
     private func handleNewMessage(convId: String, role: String, content: String) {
         guard convId == conversationId else { return }
-        Task { await refresh() }
+        // debounce 300ms 合并多次 refresh
+        refreshDebounceTask?.cancel()
+        refreshDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            await refresh()
+        }
     }
 }
 

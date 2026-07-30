@@ -95,6 +95,18 @@ final class APIClient {
         return try await perform(req)
     }
 
+    func put<T: Decodable>(path: String, body: [String: Any] = [:], timeout: TimeInterval = 15) async throws -> APIResponse<T> {
+        let url = try buildURL(path: path)
+        var req = URLRequest(url: url)
+        req.httpMethod = "PUT"
+        req.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        req.timeoutInterval = timeout
+        if !body.isEmpty {
+            req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+        }
+        return try await perform(req)
+    }
+
     private func perform<T: Decodable>(_ req: URLRequest) async throws -> APIResponse<T> {
         var req = req
         if let token = store.config.token, !token.isEmpty {
@@ -274,10 +286,21 @@ final class APIClient {
 
     // MARK: - 健康检查
 
+    /// 只判 HTTP 200，不 decode body（/api/status 返非空对象，EmptyData 仅匹配 {} 会失败）
     func checkHealth() async -> Bool {
         do {
-            let _: APIResponse<EmptyData> = try await get(path: "status", timeout: 10)
-            return true
+            let url = try buildURL(path: "status")
+            var req = URLRequest(url: url)
+            req.httpMethod = "GET"
+            req.timeoutInterval = 10
+            if let token = store.config.token, !token.isEmpty {
+                req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+            let (_, response) = try await session.data(for: req)
+            if let http = response as? HTTPURLResponse {
+                return http.statusCode == 200
+            }
+            return false
         } catch {
             return false
         }
@@ -291,5 +314,71 @@ extension SendMessageResult {
         self.ok = ok
         self.queued = queued
         self.messageId = messageId
+    }
+}
+
+// MARK: - Provider
+
+/// GET/PUT /api/providers
+struct Provider: Codable, Identifiable, Equatable {
+    var id: String
+    var name: String?
+    var isEnabled: Bool?
+    var isAuxiliary: Bool?
+    var auxiliaryFor: String?
+    var reasoningEffort: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name
+        case isEnabled = "is_enabled"
+        case isAuxiliary = "is_auxiliary"
+        case auxiliaryFor = "auxiliary_for"
+        case reasoningEffort = "reasoning_effort"
+    }
+
+    init(id: String, name: String? = nil, isEnabled: Bool? = nil, isAuxiliary: Bool? = nil,
+         auxiliaryFor: String? = nil, reasoningEffort: String? = nil) {
+        self.id = id
+        self.name = name
+        self.isEnabled = isEnabled
+        self.isAuxiliary = isAuxiliary
+        self.auxiliaryFor = auxiliaryFor
+        self.reasoningEffort = reasoningEffort
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // id flexible: 兼容 Int/String
+        if let s = try? c.decode(String.self, forKey: .id), !s.isEmpty {
+            id = s
+        } else {
+            id = String((c.decodeFlexibleInt(forKey: .id) ?? 0))
+        }
+        name = try? c.decodeIfPresent(String.self, forKey: .name)
+        isEnabled = c.decodeFlexibleBool(forKey: .isEnabled)
+        isAuxiliary = c.decodeFlexibleBool(forKey: .isAuxiliary)
+        auxiliaryFor = try? c.decodeIfPresent(String.self, forKey: .auxiliaryFor)
+        reasoningEffort = try? c.decodeIfPresent(String.self, forKey: .reasoningEffort)
+    }
+}
+
+extension APIClient {
+    // MARK: - Provider 管理
+
+    func fetchProviders() async throws -> [Provider] {
+        let resp: APIResponse<[Provider]> = try await get(path: "providers")
+        if !resp.isSuccess { throw APIError.businessError(code: resp.code, message: resp.msg) }
+        return resp.data ?? []
+    }
+
+    func updateProvider(_ provider: Provider) async throws {
+        var body: [String: Any] = ["id": provider.id]
+        if let n = provider.name { body["name"] = n }
+        if let e = provider.isEnabled { body["is_enabled"] = e }
+        if let a = provider.isAuxiliary { body["is_auxiliary"] = a }
+        if let af = provider.auxiliaryFor { body["auxiliary_for"] = af }
+        if let re = provider.reasoningEffort { body["reasoning_effort"] = re }
+        let resp: APIResponse<EmptyData> = try await put(path: "providers", body: body)
+        if !resp.isSuccess { throw APIError.businessError(code: resp.code, message: resp.msg) }
     }
 }

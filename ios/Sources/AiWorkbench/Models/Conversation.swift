@@ -35,7 +35,12 @@ struct Conversation: Codable, Identifiable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        // 兼容 Int/String，避免后端返 Int id 时落到随机 UUID 致列表点击失效
+        if let s = try? c.decode(String.self, forKey: .id), !s.isEmpty {
+            id = s
+        } else {
+            id = String((c.decodeFlexibleInt(forKey: .id) ?? 0))
+        }
         title = try? c.decodeIfPresent(String.self, forKey: .title)
         providerId = try? c.decodeIfPresent(String.self, forKey: .providerId)
         modelId = try? c.decodeIfPresent(String.self, forKey: .modelId)

@@ -35,7 +35,7 @@ def _ok(data: Any = None, msg: str = "success") -> web.Response:
 
 
 def _err(code: int, msg: str, data: Any = None) -> web.Response:
-    return web.json_response({"code": code, "msg": msg, "data": data}, status=200)
+    return web.json_response({"code": code, "msg": msg, "data": data}, status=code)
 
 
 @web.middleware
@@ -201,7 +201,7 @@ async def files_handler(request: web.Request) -> web.Response:
             return _err(500, str(e))
         if not result.get("ok", True) and result.get("error") == "timeout":
             return _err(504, "agent timeout")
-        return _ok(result.get("data") or result)
+        return _ok(result.get("data", {}))
     # POST：读文件
     try:
         body = await request.json()

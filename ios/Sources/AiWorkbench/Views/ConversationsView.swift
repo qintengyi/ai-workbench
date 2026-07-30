@@ -43,7 +43,17 @@ struct ConversationsView: View {
                 ConversationDetailView(conversationId: convId)
             }
             .refreshable { await refresh() }
-            .task { await refresh() }
+            .task {
+                appState.webSocketClient.onConversationUpdated = { _ in
+                    Task { await refresh() }
+                }
+                await refresh()
+            }
+            .onDisappear {
+                if appState.webSocketClient.onConversationUpdated != nil {
+                    appState.webSocketClient.onConversationUpdated = nil
+                }
+            }
             .overlay {
                 if let err = errorMsg, conversations.isEmpty {
                     VStack(spacing: 8) {

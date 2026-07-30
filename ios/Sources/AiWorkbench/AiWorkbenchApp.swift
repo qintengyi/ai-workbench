@@ -7,6 +7,8 @@ import Observation
 final class AppStateManager {
     var isLoggedIn: Bool = false
     var currentUser: String? = nil
+    /// agent 在线状态镜像，供 UI 订阅
+    var isAgentOnline: Bool = false
 
     let webSocketClient: WSClient = WSClient.shared
     var globalAlert: GlobalAlert?
@@ -16,6 +18,10 @@ final class AppStateManager {
     init() {
         self.isLoggedIn = store.config.isLoggedIn
         self.currentUser = store.config.username
+        // 桥接 agent 在线状态到 @Observable 属性
+        webSocketClient.onAgentOnlineChanged = { [weak self] online in
+            DispatchQueue.main.async { self?.isAgentOnline = online }
+        }
     }
 
     func refreshAuthState() {
@@ -50,6 +56,7 @@ struct GlobalAlert: Identifiable {
 @main
 struct AiWorkbenchApp: App {
     @State private var appState = AppStateManager()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -58,6 +65,13 @@ struct AiWorkbenchApp: App {
                 .preferredColorScheme(.dark)
                 .alert(item: $appState.globalAlert) { alert in
                     Alert(title: Text(alert.title), message: Text(alert.message), dismissButton: .default(Text("好")))
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    guard phase == .active else { return }
+                    // 回前台时若应连接但未连，自动重连
+                    if appState.isLoggedIn && !appState.webSocketClient.isConnected {
+                        appState.webSocketClient.start()
+                    }
                 }
         }
     }

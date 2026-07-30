@@ -225,7 +225,10 @@ final class WSClient {
         case "stream_chunk":
             // data: {conversation_id, delta, reasoning_delta?, finished}
             if let dict = event.dataRaw as? [String: Any] {
-                let convId = dict["conversation_id"] as? String ?? ""
+                // conversation_id flexible: 兼容 Int/String
+                let convId: String
+                if let s = dict["conversation_id"] as? String { convId = s }
+                else { convId = String((dict["conversation_id"] as? Int) ?? 0) }
                 let delta = dict["delta"] as? String ?? ""
                 let reasoning = dict["reasoning_delta"] as? String
                 let finished = (dict["finished"] as? Bool) ?? false
@@ -239,7 +242,9 @@ final class WSClient {
         case "new_message":
             // data: {conversation_id, role, content}
             if let dict = event.dataRaw as? [String: Any] {
-                let convId = dict["conversation_id"] as? String ?? ""
+                let convId: String
+                if let s = dict["conversation_id"] as? String { convId = s }
+                else { convId = String((dict["conversation_id"] as? Int) ?? 0) }
                 let role = dict["role"] as? String ?? ""
                 let content = dict["content"] as? String ?? ""
                 onNewMessage?(convId, role, content)
@@ -249,9 +254,11 @@ final class WSClient {
         case "agent_offline":
             onAgentOnlineChanged?(false)
         case "conversation_updated":
-            if let dict = event.dataRaw as? [String: Any],
-               let convId = dict["conversation_id"] as? String {
-                onConversationUpdated?(convId)
+            if let dict = event.dataRaw as? [String: Any] {
+                let convId: String
+                if let s = dict["conversation_id"] as? String { convId = s }
+                else { convId = String((dict["conversation_id"] as? Int) ?? 0) }
+                if !convId.isEmpty { onConversationUpdated?(convId) }
             }
         case "pong":
             break

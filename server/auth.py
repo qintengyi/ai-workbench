@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import json
 import logging
+import secrets
 import time
 from typing import Any, Optional
 
@@ -36,7 +37,7 @@ _DKLEN = 32
 
 def hash_password(password: str) -> tuple[str, str]:
     """返回 (password_hash, salt)，都用 hex 存储。"""
-    salt = hashlib.sha256(time.time().hex().encode() + password.encode()).digest()[:16]
+    salt = secrets.token_bytes(16)
     dk = hashlib.pbkdf2_hmac(_HASH_NAME, password.encode("utf-8"), salt, _PBKDF2_ITER, dklen=_DKLEN)
     return dk.hex(), salt.hex()
 
