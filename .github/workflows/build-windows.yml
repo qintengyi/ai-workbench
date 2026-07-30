@@ -28,10 +28,10 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       - name: Restore
-        run: dotnet restore AiWorkbench.sln
+        run: dotnet restore src/AiWorkbench/AiWorkbench.csproj
 
       - name: Build (Release x64, self-contained)
-        run: dotnet build AiWorkbench.sln -c Release -p:Platform=x64 -p:SelfContained=true -p:WindowsAppSDKSelfContained=true -p:RuntimeIdentifier=win-x64 -m
+        run: dotnet build src/AiWorkbench/AiWorkbench.csproj -c Release -p:Platform=x64 -p:SelfContained=true -p:WindowsAppSDKSelfContained=true -p:RuntimeIdentifier=win-x64 -m
 
       - name: Publish artifact
         uses: actions/upload-artifact@v4
