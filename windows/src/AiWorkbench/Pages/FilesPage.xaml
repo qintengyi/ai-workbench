@@ -15,7 +15,7 @@
             <SplitView.Pane>
                 <ListView x:Name="FileList" SelectionChanged="File_SelectionChanged">
                     <ListView.ItemTemplate>
-                        <DataTemplate x:DataType="svc:FileWorkspace+Entry">
+                        <DataTemplate x:DataType="svc:FileEntry">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="{x:Bind DirGlyph, Mode=OneTime}" FontSize="14"/>
                                 <TextBlock Text="{x:Bind Name}" VerticalAlignment="Center"/>

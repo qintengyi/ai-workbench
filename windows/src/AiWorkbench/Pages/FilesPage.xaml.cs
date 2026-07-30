@@ -29,7 +29,7 @@ public sealed partial class FilesPage : Page
 
     private void File_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (FileList.SelectedItem is not FileWorkspace.Entry entry) return;
+        if (FileList.SelectedItem is not FileEntry entry) return;
         if (entry.IsDirectory)
         {
             _currentDir = entry.FullPath;
