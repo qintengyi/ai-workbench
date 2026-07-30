@@ -18,7 +18,7 @@ struct FilesView: View {
                         navigateUp()
                     } label: {
                         Label("返回上级", systemImage: "arrow.up")
-                            .foregroundStyle(.accent)
+                            .foregroundStyle(Color.accentColor)
                     }
                 }
                 if isLoading && rootNodes.isEmpty {
@@ -111,7 +111,7 @@ struct FileNodeRow: View {
         Button(action: onOpen) {
             HStack {
                 Image(systemName: node.isDir ? "folder.fill" : fileIcon(node.name))
-                    .foregroundStyle(node.isDir ? .accent : .secondary)
+                    .foregroundStyle(node.isDir ? Color.accentColor : Color.secondary)
                     .font(.title3)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(node.name).font(.body).lineLimit(1)

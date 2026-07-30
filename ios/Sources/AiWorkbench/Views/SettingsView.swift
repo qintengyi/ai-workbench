@@ -13,24 +13,24 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("服务端") {
-                    LabeledRow("地址", value: serverURL)
-                    LabeledRow("用户", value: username)
-                    LabeledRow("Token", value: maskToken(SettingsStore.shared.config.token ?? ""))
+                    LabeledRow(label: "地址", value: serverURL)
+                    LabeledRow(label: "用户", value: username)
+                    LabeledRow(label: "Token", value: maskToken(SettingsStore.shared.config.token ?? ""))
                 }
 
                 Section("WebSocket 连接") {
-                    LabeledRow("状态", value: appState.webSocketClient.isConnected ? "已连接" : "未连接")
-                    LabeledRow("连接次数", value: "\(appState.webSocketClient.connectCount)")
-                    LabeledRow("最近事件", value: appState.webSocketClient.lastEventReceivedAt.isEmpty ? "—" : appState.webSocketClient.lastEventReceivedAt)
+                    LabeledRow(label: "状态", value: appState.webSocketClient.isConnected ? "已连接" : "未连接")
+                    LabeledRow(label: "连接次数", value: "\(appState.webSocketClient.connectCount)")
+                    LabeledRow(label: "最近事件", value: appState.webSocketClient.lastEventReceivedAt.isEmpty ? "—" : appState.webSocketClient.lastEventReceivedAt)
                     if let err = appState.webSocketClient.lastError {
                         Text(err).font(.footnote).foregroundStyle(.red)
                     }
                 }
 
                 Section("关于") {
-                    LabeledRow("版本", value: "\(appVersion()) (\(buildVersion()))")
-                    LabeledRow("平台", value: "iOS 远程控制端")
-                    LabeledRow("协议", value: "REST /api/* + WS /ws/app")
+                    LabeledRow(label: "版本", value: "\(appVersion()) (\(buildVersion()))")
+                    LabeledRow(label: "平台", value: "iOS 远程控制端")
+                    LabeledRow(label: "协议", value: "REST /api/* + WS /ws/app")
                 }
 
                 Section {

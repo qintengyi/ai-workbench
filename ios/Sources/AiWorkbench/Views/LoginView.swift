@@ -65,7 +65,7 @@ struct LoginView: View {
         VStack(spacing: 8) {
             Image(systemName: "cpu")
                 .font(.system(size: 56))
-                .foregroundStyle(.accent)
+                .foregroundStyle(Color.accentColor)
             Text("全场景 AI 办公工作台")
                 .font(.title3.bold())
             Text("远程控制 Windows 端")

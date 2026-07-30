@@ -34,7 +34,7 @@ struct ConversationDetailView: View {
                     .padding(.vertical, 8)
                 }
                 .onChange(of: messages.count) { _, _ in
-                    withAnimation { proxy.scrollTo(messages.last?.id ?? "streaming", anchor: .bottom) }
+                    withAnimation { proxy.scrollTo(messages.last?.id ?? 0, anchor: .bottom) }
                 }
                 .onChange(of: streamingText) { _, _ in
                     withAnimation { proxy.scrollTo("streaming", anchor: .bottom) }
@@ -141,7 +141,7 @@ struct ConversationDetailView: View {
 
     private func handleStream(_ chunk: WSStreamChunk) {
         guard chunk.conversationId == conversationId else { return }
-        if let d = chunk.delta, !d.isEmpty { streamingText += d }
+        if !chunk.delta.isEmpty { streamingText += chunk.delta }
         if let r = chunk.reasoningDelta, !r.isEmpty { streamingReasoning += r }
         isStreaming = !chunk.finished
         if chunk.finished {

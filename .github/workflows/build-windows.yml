@@ -6,10 +6,6 @@ on:
     paths:
       - 'windows/**'
       - '.github/workflows/build-windows.yml'
-  pull_request:
-    branches: [main, master]
-    paths:
-      - 'windows/**'
   workflow_dispatch:
 
 jobs:
@@ -32,18 +28,10 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       - name: Restore
-        run: msbuild AiWorkbench.sln /t:Restore /p:Configuration=Release /p:Platform=x64 -m
+        run: dotnet restore AiWorkbench.sln
 
       - name: Build (Release x64, self-contained)
-        run: |
-          msbuild AiWorkbench.sln `
-            /p:Configuration=Release `
-            /p:Platform=x64 `
-            /p:SelfContained=true `
-            /p:WindowsAppSDKSelfContained=true `
-            /p:RuntimeIdentifier=win-x64 `
-            /p:PlatformTarget=x64 `
-            -m
+        run: dotnet build AiWorkbench.sln -c Release -p:Platform=x64 -p:SelfContained=true -p:WindowsAppSDKSelfContained=true -p:RuntimeIdentifier=win-x64 -m
 
       - name: Publish artifact
         uses: actions/upload-artifact@v4
